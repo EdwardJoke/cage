@@ -177,27 +177,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
-name = "cage-core"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "env_logger",
- "getrandom 0.4.3",
- "glob",
- "log",
- "serde",
- "serde_json",
- "ureq",
- "wasmtime",
- "wasmtime-wasi",
-]
-
-[[package]]
 name = "cage-py"
 version = "0.1.0"
 dependencies = [
- "cage-core",
+ "coplex-cage",
  "pyo3",
 ]
 
@@ -352,6 +335,23 @@ name = "colorchoice"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1d07550c9036bf2ae0c684c4297d503f838287c83c53686d05370d0e139ae570"
+
+[[package]]
+name = "coplex-cage"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "env_logger",
+ "getrandom 0.4.3",
+ "glob",
+ "log",
+ "serde",
+ "serde_json",
+ "ureq",
+ "wasmtime",
+ "wasmtime-wasi",
+]
 
 [[package]]
 name = "core-foundation-sys"

@@ -2,9 +2,9 @@ use std::collections::HashMap;
 
 use clap::{Args, Parser, Subcommand};
 
-use cage_core::orchestrator::{Orchestrator, OrchestratorConfig};
-use cage_core::router::{RouterConfig, Topology};
-use cage_core::sandbox;
+use coplex_cage::orchestrator::{Orchestrator, OrchestratorConfig};
+use coplex_cage::router::{RouterConfig, Topology};
+use coplex_cage::sandbox;
 
 #[derive(Parser)]
 #[command(name = "cage", about = "Agent WASM sandbox", version)]

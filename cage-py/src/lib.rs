@@ -11,9 +11,9 @@ use std::collections::HashMap;
 use pyo3::exceptions::{PyKeyError, PyRuntimeError};
 use pyo3::prelude::*;
 
-use ::cage_core::orchestrator::AgentStatus;
-use ::cage_core::orchestrator::{Orchestrator, OrchestratorConfig};
-use ::cage_core::router::{RouterConfig, Topology};
+use ::coplex_cage::orchestrator::AgentStatus;
+use ::coplex_cage::orchestrator::{Orchestrator, OrchestratorConfig};
+use ::coplex_cage::router::{RouterConfig, Topology};
 
 // ── PyRoundSummary ──────────────────────────────────────────────────
 
@@ -52,7 +52,7 @@ struct PyRoundSummary {
 
 impl PyRoundSummary {
     fn from_summary(
-        summary: ::cage_core::orchestrator::RoundSummary,
+        summary: ::coplex_cage::orchestrator::RoundSummary,
         observed_messages: Vec<String>,
     ) -> Self {
         PyRoundSummary {

@@ -10,7 +10,7 @@ lto = true
 strip = "symbols"
 
 [package]
-name = "cage-core"
+name = "coplex-cage"
 version = "0.1.0"
 edition = "2024"
 authors = ["Coplex"]
@@ -18,7 +18,7 @@ license = "Apache-2.0"
 description = "Deterministic WASM sandbox for multi-agent orchestration"
 repository = "https://codeberg.org/EdwardJoke/cage"
 homepage = "https://codeberg.org/EdwardJoke/cage"
-documentation = "https://docs.rs/cage-core"
+documentation = "https://docs.rs/coplex-cage"
 readme = "README.md"
 categories = ["wasm", "concurrency"]
 keywords = ["wasm", "sandbox", "agent", "orchestration", "deterministic"]

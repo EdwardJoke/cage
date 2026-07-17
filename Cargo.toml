@@ -16,6 +16,12 @@ edition = "2024"
 authors = ["Coplex"]
 license = "Apache-2.0"
 description = "Deterministic WASM sandbox for multi-agent orchestration"
+repository = "https://codeberg.org/EdwardJoke/cage"
+homepage = "https://codeberg.org/EdwardJoke/cage"
+documentation = "https://docs.rs/cage-core"
+readme = "README.md"
+categories = ["wasm", "concurrency"]
+keywords = ["wasm", "sandbox", "agent", "orchestration", "deterministic"]
 
 [dependencies]
 anyhow = "1.0.103"

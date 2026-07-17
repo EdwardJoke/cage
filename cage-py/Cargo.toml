@@ -1,0 +1,15 @@
+[package]
+name = "cage-py"
+version = "0.1.0"
+edition = "2021"
+authors = ["Coplex"]
+license = "Apache-2.0"
+description = "Python bindings for the cage WASM orchestrator"
+
+[lib]
+name = "cage"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.22", features = ["extension-module"] }
+cage-core = { path = ".." }

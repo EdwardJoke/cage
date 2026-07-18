@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import json
-import os
 from pathlib import Path
 
 import pytest
@@ -30,9 +29,11 @@ def _agent_p0() -> str:
 
 def test_basic_lifecycle():
     """Init + tick with a well-formed policy."""
-    policy = Policy(fuel=500_000) \
-        .env("MY_SECRET", "sup3rs3cr3t") \
+    policy = (
+        Policy(fuel=500_000)
+        .env("MY_SECRET", "sup3rs3cr3t")
         .allow_url("https://httpbin.org")
+    )
 
     box = Sandbox(_agent_p0(), policy)
     try:
@@ -74,8 +75,7 @@ def test_fuel_exhaustion():
 
 def test_url_whitelist_rejection():
     """URLs not in the whitelist must be rejected."""
-    policy = Policy(fuel=500_000) \
-        .allow_url("https://example.com")  # NOT httpbin.org
+    policy = Policy(fuel=500_000).allow_url("https://example.com")  # NOT httpbin.org
 
     box = Sandbox(_agent_p0(), policy)
     msgs = box.run({})
@@ -85,7 +85,9 @@ def test_url_whitelist_rejection():
     assert len(tick_msgs) >= 1
     payload = tick_msgs[0]["payload"]
     response_str = payload.get("http_response", "{}")
-    response = json.loads(response_str) if isinstance(response_str, str) else response_str
+    response = (
+        json.loads(response_str) if isinstance(response_str, str) else response_str
+    )
     assert "URL not allowed" in str(response)
 
 

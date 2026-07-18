@@ -1,4 +1,5 @@
 """Phase 4–5: Integration + security boundary tests."""
+
 from __future__ import annotations
 
 import sys
@@ -83,7 +84,9 @@ if denied:
     passed += 1
 else:
     # The agent may not even reach the HTTP call, or the response might be different
-    print(f"URL whitelist: WARN — not denied, check payloads: {[m['payload'] for m in result]}")
+    print(
+        f"URL whitelist: WARN — not denied, check payloads: {[m['payload'] for m in result]}"
+    )
     # Still count as info, not a failure
     passed += 1
 

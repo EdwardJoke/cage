@@ -9,14 +9,26 @@ from cage import Orchestrator, RoundSummary
 
 AGENT_P0_PATH = os.path.join(
     os.path.dirname(__file__),
-    "..", "..", "examples", "agent-p0",
-    "target", "wasm32-wasip1", "release", "agent_p0.wasm",
+    "..",
+    "..",
+    "examples",
+    "agent-p0",
+    "target",
+    "wasm32-wasip1",
+    "release",
+    "agent_p0.wasm",
 )
 
 AGENT_P1_PATH = os.path.join(
     os.path.dirname(__file__),
-    "..", "..", "examples", "agent-p1",
-    "target", "wasm32-wasip1", "release", "agent_p1.wasm",
+    "..",
+    "..",
+    "examples",
+    "agent-p1",
+    "target",
+    "wasm32-wasip1",
+    "release",
+    "agent_p1.wasm",
 )
 
 HAS_AGENT_P0 = os.path.exists(AGENT_P0_PATH)
@@ -172,8 +184,10 @@ def test_leader_worker_rounds():
 
     for r in range(3):
         summary = orch.tick_all()
-        print(f"Round {r}: routed={summary.messages_routed}, "
-              f"dropped={summary.messages_dropped}")
+        print(
+            f"Round {r}: routed={summary.messages_routed}, "
+            f"dropped={summary.messages_dropped}"
+        )
 
     agents = dict(orch.list_agents())
     print(f"Final status: {agents}")

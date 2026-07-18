@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Protocol, TypedDict, Union
+from typing import Any, Dict, List, Optional, Protocol, TypedDict
 
 
 class AgentMessage(TypedDict):
@@ -28,17 +28,13 @@ class SandboxStats(TypedDict):
 class HasCageSandbox(Protocol):
     """Protocol for objects that wrap a Cage :class:`cage.Sandbox`."""
 
-    def init(self, message: Dict[str, Any]) -> Optional[AgentMessage]:
-        ...
+    def init(self, message: Dict[str, Any]) -> Optional[AgentMessage]: ...
 
-    def tick(self) -> Optional[AgentMessage]:
-        ...
+    def tick(self) -> Optional[AgentMessage]: ...
 
-    def run(self, init_message: Dict[str, Any]) -> List[AgentMessage]:
-        ...
+    def run(self, init_message: Dict[str, Any]) -> List[AgentMessage]: ...
 
-    def stats(self) -> SandboxStats:
-        ...
+    def stats(self) -> SandboxStats: ...
 
 
 __all__ = [

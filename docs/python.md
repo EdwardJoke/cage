@@ -48,39 +48,9 @@ print(f"Routed: {summary.messages_routed}, Topology: {summary.routing_topology}"
 | `agent_count()` | `int` | Number of registered agents |
 | `agent_status(id)` | `str` | Running, Paused, Crashed, Terminated |
 | `list_agents()` | `list[tuple]` | All agents with status |
-| `save(path)` | `None` | Save checkpoint to JSON file |
-| `save_full(path)` | `None` | Save checkpoint with WASM memory snapshots |
-| `load(path)` (static) | `Orchestrator` | Load orchestrator from checkpoint |
-| `export_summary()` | `str` | Human-readable JSON summary (no binary memory) |
-| `set_save_every(n)` | `None` | Auto-save checkpoint every N rounds |
-| `set_checkpoint_dir(dir)` | `None` | Directory for auto-save checkpoints |
 
 ## RoundSummary & Errors
 
-**Fields:** `messages_routed`, `messages_dropped`, `messages_dlq`, `dlq_depth`, `routing_topology`, `round_fuel`, `crashed`, `agent_inbox_depths`
+**Fields:** `messages_routed`, `messages_dropped`, `messages_dlq`, `dlq_depth`, `routing_topology`, `round_fuel`, `crashed`, `agent_inbox_depths`, `observed_messages`
 
 **Errors:** `KeyError` (agent not found), `RuntimeError` (WASM load/tick failure)
-
-## Checkpoint & Resume Example
-
-```python
-from cage import Orchestrator
-
-orch = Orchestrator()
-orch.spawn("leader", "agent_p1.wasm")
-orch.spawn("worker-a", "agent_p1.wasm")
-
-for _ in range(3):
-    summary = orch.tick_all()
-
-# Save checkpoint (no memory snapshots — smaller file)
-orch.save("checkpoint.json")
-
-# Save with full WASM memory (slower, larger, exact reconstruction)
-orch.save_full("checkpoint-full.json")
-
-# Later: restore and continue
-restored = Orchestrator.load("checkpoint.json")
-summary = restored.tick_all()
-print(f"Resumed: routed {summary.messages_routed}")
-```

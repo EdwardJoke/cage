@@ -1,12 +1,12 @@
 # CLI Reference
 
-The `cage` binary provides three subcommands: `run` for single agents, `orchestrate` for multi-agent scenarios, and `resume` to restore from a checkpoint.
+The `cage` binary provides two subcommands: `run` for single agents and `orchestrate` for multi-agent scenarios.
 
 ## `cage run`
 
 Run a single WASM agent.
 
-```
+```text
 Usage: cage run [OPTIONS] <AGENT>
 
 Arguments:
@@ -25,7 +25,7 @@ Options:
 
 Run multi-agent orchestration.
 
-```
+```text
 Usage: cage orchestrate [OPTIONS] --agent <ID=PATH>
 
 Options:
@@ -39,28 +39,9 @@ Options:
   --topology <NAME>       Routing topology [default: direct]
   --hub <ID>              Hub agent ID (required for hub-and-spoke)
   --dlq                   Enable Dead Letter Queue
-  --save-every <NUM>      Save checkpoint every N rounds
-  --checkpoint-dir <DIR>  Directory for checkpoint files [default: .]
-  --full-snapshot         Include WASM linear memory in checkpoint
   -h, --help              Print help
 ```
 
-## `cage resume`
-
-Restore orchestrator state from a checkpoint and continue execution.
-
-```
-Usage: cage resume [OPTIONS] --checkpoint <PATH>
-
-Options:
-  -c, --checkpoint <PATH>  Path to checkpoint JSON file (required)
-  -r, --rounds <NUM>       Tick rounds to execute [default: 1]
-  -v, --verbose            Enable debug logging
-  --save-every <NUM>       Save checkpoint every N rounds
-  --checkpoint-dir <DIR>   Directory for checkpoint files
-  --full-snapshot          Include WASM linear memory in checkpoint
-  -h, --help               Print help
-```
 
 ## Examples
 
@@ -69,20 +50,14 @@ Options:
 cage run agent.wasm -m '{"task":"go"}' -e API_KEY=abc \
   --allow-url https://api.example.com --fuel 500000 -v
 
-# Broadcast orchestration with DLQ and auto-save
+# Broadcast orchestration with DLQ
 cage orchestrate -a 'lead=lead.wasm' -a 'w1=w.wasm' \
   --message '{"go":true}' --rounds 5 --fuel 1000000 \
-  --topology broadcast --dlq --save-every 2 --checkpoint-dir ./ckpt -v
+  --topology broadcast --dlq -v
 
 # Hub-and-spoke
 cage orchestrate -a 'hub=h.wasm' -a 'w1=w.wasm' \
   --rounds 3 --topology hub-and-spoke --hub hub -v
-
-# Resume from checkpoint
-cage resume --checkpoint ./ckpt/checkpoint-2.json --rounds 3 -v
-
-# Resume with full snapshot (captures WASM memory)
-cage resume -c checkpoint-final.json --rounds 5 --full-snapshot
 ```
 
 See [docs/routing.md](routing.md) for topology-specific guidance.

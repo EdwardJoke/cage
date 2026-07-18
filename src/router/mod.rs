@@ -5,6 +5,8 @@
 
 use std::collections::HashSet;
 
+use serde::{Deserialize, Serialize};
+
 mod broadcast;
 mod direct;
 mod hub_and_spoke;
@@ -18,7 +20,7 @@ pub use pattern::PatternRouter;
 // ── Topology ────────────────────────────────────────────────────────
 
 /// Enum of supported routing topologies.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Topology {
     /// Route by exact agent ID match (`payload["to"]` → one agent).
     Direct,
@@ -57,7 +59,7 @@ impl Topology {
 // ── RouterConfig ────────────────────────────────────────────────────
 
 /// Configuration for the message router.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RouterConfig {
     /// Which topology to use.
     pub topology: Topology,

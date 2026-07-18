@@ -163,10 +163,10 @@ impl Sandbox {
             }
         }
 
-        if ptr != 0 {
-            if let Ok(free) = instance.get_typed_func::<i32, ()>(&mut *store, "_cage_free") {
-                free.call(&mut *store, ptr)?;
-            }
+        if ptr != 0
+            && let Ok(free) = instance.get_typed_func::<i32, ()>(&mut *store, "_cage_free")
+        {
+            free.call(&mut *store, ptr)?;
         }
 
         let fuel_after = store.get_fuel()?;

@@ -4,6 +4,14 @@ Python API for driving multi-agent orchestration via PyO3.
 
 ## Installation & Usage
 
+Install from PyPI (recommended):
+
+```bash
+pip install coplex-cage
+```
+
+Or build from source:
+
 ```bash
 cd cage-py && maturin develop --release
 ```
@@ -25,6 +33,8 @@ summary = orch.tick_all()
 print(f"Routed: {summary.messages_routed}, Topology: {summary.routing_topology}")
 ```
 
+> **Note:** The Python package imports as `cage` (not `coplex_cage`). Use `from cage import Orchestrator`.
+
 ## API Reference
 
 | Method | Returns | Description |
@@ -41,6 +51,6 @@ print(f"Routed: {summary.messages_routed}, Topology: {summary.routing_topology}"
 
 ## RoundSummary & Errors
 
-**Fields:** `messages_routed`, `messages_dropped`, `messages_dlq`, `dlq_depth`, `routing_topology`, `round_fuel`, `crashed`, `agent_inbox_depths`
+**Fields:** `messages_routed`, `messages_dropped`, `messages_dlq`, `dlq_depth`, `routing_topology`, `round_fuel`, `crashed`, `agent_inbox_depths`, `observed_messages`
 
 **Errors:** `KeyError` (agent not found), `RuntimeError` (WASM load/tick failure)

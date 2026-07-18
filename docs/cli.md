@@ -6,7 +6,7 @@ The `cage` binary provides two subcommands: `run` for single agents and `orchest
 
 Run a single WASM agent.
 
-```
+```text
 Usage: cage run [OPTIONS] <AGENT>
 
 Arguments:
@@ -25,7 +25,7 @@ Options:
 
 Run multi-agent orchestration.
 
-```
+```text
 Usage: cage orchestrate [OPTIONS] --agent <ID=PATH>
 
 Options:
@@ -41,6 +41,7 @@ Options:
   --dlq                   Enable Dead Letter Queue
   -h, --help              Print help
 ```
+
 
 ## Examples
 

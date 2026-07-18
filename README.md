@@ -4,11 +4,11 @@ Deterministic WebAssembly sandbox for orchestrating multi-agent systems with con
 
 ```
 ┌──────────────┐    peer_send     ┌──────────────┐
-│   Agent A    │ ──────────────► │   Agent B    │
-│   (WASM)     │  inbox/outbox   │   (WASM)     │
-└──────┬───────┘                 └──────┬───────┘
-       │                                │
-       └────────── host ────────────────┘
+│   Agent A    │ ──────────────►  │    Agent B   │
+│   (WASM)     │   inbox/outbox   │    (WASM)    │
+└──────┬───────┘                  └──────┬───────┘
+       │                                 │
+       └───────────── host ──────────────┘
 ```
 
 ## Features
@@ -23,9 +23,18 @@ Deterministic WebAssembly sandbox for orchestrating multi-agent systems with con
 ## Quick Start
 
 ```bash
-cargo build --release
+# Install the CLI from crates.io
+cargo install coplex-cage
+
+# Install Python bindings from PyPI
+pip install coplex-cage
+
+# Build example agents (requires wasm32-wasip1 target)
+rustup target add wasm32-wasip1
 cargo build -p agent-p1 --target wasm32-wasip1 --release
-cargo run --release -- orchestrate \
+
+# Run multi-agent orchestration
+cage orchestrate \
   --agent 'leader=target/wasm32-wasip1/release/agent_p1.wasm' \
   --agent 'worker-a=target/wasm32-wasip1/release/agent_p1.wasm' \
   --agent 'worker-b=target/wasm32-wasip1/release/agent_p1.wasm' \
@@ -34,6 +43,8 @@ cargo run --release -- orchestrate \
 ```
 
 See [docs/quickstart.md](docs/quickstart.md) for the full tutorial.
+
+> **Install from source?** Clone the repo and run `cargo build --release` instead of `cargo install`.
 
 ## Documentation
 

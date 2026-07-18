@@ -2,13 +2,28 @@
 
 Step-by-step guide to your first multi-agent run.
 
-## Build & Run a Single Agent
+## Install Cage
 
 ```bash
-cargo build --release
+# Install the CLI (binary, no build needed)
+cargo install coplex-cage
+
+# Install Python bindings
+pip install coplex-cage
+```
+
+> **Building from source?** Clone the repo and use `cargo build --release` instead. See [docs/install.md](install.md).
+
+## Set Up & Run a Single Agent
+
+You'll need the WASM target and example agents (the only part that requires compilation):
+
+```bash
+rustup target add wasm32-wasip1
+cargo build -p agent-p0 --target wasm32-wasip1 --release
 cargo build -p agent-p1 --target wasm32-wasip1 --release
 
-cargo run --release -- run target/wasm32-wasip1/release/agent_p0.wasm \
+cage run target/wasm32-wasip1/release/agent_p0.wasm \
   --message '{"hello":"world"}' --env FOO=bar \
   --allow-url https://httpbin.org --fuel 500000
 ```
@@ -18,7 +33,7 @@ Agent-p0 exercises all 9 host functions and logs the results.
 ## Multi-Agent Orchestration
 
 ```bash
-cargo run --release -- orchestrate \
+cage orchestrate \
   --agent 'leader=target/wasm32-wasip1/release/agent_p1.wasm' \
   --agent 'worker-a=target/wasm32-wasip1/release/agent_p1.wasm' \
   --agent 'worker-b=target/wasm32-wasip1/release/agent_p1.wasm' \
@@ -31,7 +46,7 @@ Leader distributes tasks to workers, collects results, and completes within 6 ro
 ## Python Bindings
 
 ```bash
-cd cage-py && maturin develop --release && python
+python
 ```
 
 ```python

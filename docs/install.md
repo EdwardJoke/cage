@@ -2,32 +2,36 @@
 
 Prerequisites, build commands, and common setup errors.
 
-## Prerequisites & Build
+## Quick Install
 
-Install the [Rust toolchain](https://rustup.rs/) (edition 2024, Rust 1.85+):
+The fastest way to get started:
 
 ```bash
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-rustup target add wasm32-wasip1
-pip install maturin pytest   # optional: Python bindings
+# Install the cage CLI from crates.io
+cargo install coplex-cage
+
+# Install Python bindings from PyPI
+pip install coplex-cage
 ```
 
-Build the host crate and example agents:
+The `cage` binary is now available globally. See [docs/quickstart.md](quickstart.md) for your first run.
+
+## Build from Source
+
+Alternatively, clone the repo and build locally:
 
 ```bash
+git clone <repo-url> && cd cage
 cargo build --release
-cargo build -p agent-p0 --target wasm32-wasip1 --release
-cargo build -p agent-p1 --target wasm32-wasip1 --release
-cd cage-py && maturin develop --release   # optional
+cd cage-py && maturin develop --release   # optional: Python bindings
 ```
 
-## Verify
+## Prerequisites
 
-```bash
-cargo run --release -- --help
-```
-
-Expected output shows `run` and `orchestrate` subcommands. See [docs/quickstart.md](quickstart.md) for your first run.
+- [Rust toolchain](https://rustup.rs/) (edition 2024, Rust 1.85+)
+- `wasm32-wasip1` target (for building WASM agents): `rustup target add wasm32-wasip1`
+- (Optional) `maturin` and `pytest`: `pip install maturin pytest`
+- (Optional) Python 3.8+ for bindings
 
 ## Troubleshooting
 
@@ -36,4 +40,5 @@ Expected output shows `run` and `orchestrate` subcommands. See [docs/quickstart.
 | `unknown import 'cage::...'` | Agent must use `#[link(wasm_import_module = "cage")]` |
 | `_cage_alloc returned negative pointer` | Increase `HEAP_SIZE` in the agent |
 | `out of fuel` | Increase `--fuel`. Agent-p1 typically needs 1–3M per round |
-| `ModuleNotFoundError: No module named 'cage'` | Run `maturin develop --release` from `cage-py/` |
+| `ModuleNotFoundError: No module named 'cage'` | `pip install coplex-cage` or build from source via `maturin develop --release` |
+| `command not found: cage` | Run `cargo install coplex-cage` first |

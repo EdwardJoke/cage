@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 
+use base64::engine::general_purpose::STANDARD as BASE64;
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use wasmtime::*;
@@ -39,8 +40,42 @@ pub struct AgentSnapshot {
     pub inbox: Vec<AgentMessage>,
     pub outbox: Vec<AgentMessage>,
     pub env: HashMap<String, String>,
+    pub allowed_urls: Vec<String>,
     pub tick_count: u32,
+    #[serde(with = "base64_memory", default)]
     pub memory_state: Option<Vec<u8>>,
+}
+
+/// Serialize agent linear memory as a single compact base64 string rather than
+/// a JSON array of bytes, which would emit one line per byte for multi-MB
+/// memories.
+mod base64_memory {
+    use super::BASE64;
+    use base64::Engine;
+    use serde::{Deserialize, Deserializer, Serializer};
+
+    pub fn serialize<S: Serializer>(
+        value: &Option<Vec<u8>>,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        match value {
+            Some(bytes) => serializer.serialize_some(&BASE64.encode(bytes)),
+            None => serializer.serialize_none(),
+        }
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<Option<Vec<u8>>, D::Error> {
+        let encoded: Option<String> = Option::deserialize(deserializer)?;
+        match encoded {
+            Some(s) => BASE64
+                .decode(s.as_bytes())
+                .map(Some)
+                .map_err(serde::de::Error::custom),
+            None => Ok(None),
+        }
+    }
 }
 
 /// Aggregated observability counters across all rounds.
@@ -129,12 +164,67 @@ fn snapshot_memory(memory: &Memory, store: &Store<sandbox::SandboxState>) -> Vec
     }
 }
 
+/// Size of a WebAssembly linear-memory page in bytes.
+const WASM_PAGE_SIZE: usize = 64 * 1024;
+
 fn restore_memory(
     memory: &Memory,
     store: &mut Store<sandbox::SandboxState>,
     bytes: &[u8],
-) -> Result<(), wasmtime::MemoryAccessError> {
-    memory.write(store, 0, bytes)
+) -> Result<(), SnapshotError> {
+    // A freshly instantiated module only has its declared minimum number of
+    // pages. If the agent had grown its memory before the checkpoint, the
+    // snapshot buffer is larger than the current memory, so grow it to fit
+    // before writing to avoid an out-of-bounds write error.
+    let current = memory.data_size(&mut *store);
+    if bytes.len() > current {
+        let missing = bytes.len() - current;
+        let extra_pages = missing.div_ceil(WASM_PAGE_SIZE) as u64;
+        memory
+            .grow(&mut *store, extra_pages)
+            .map_err(|e| SnapshotError::MemoryError(e.to_string()))?;
+    }
+    memory
+        .write(store, 0, bytes)
+        .map_err(|e| SnapshotError::MemoryError(e.to_string()))
+}
+
+// ── WASM path validation ──────────────────────────────────────────────
+
+/// Validate the WASM path embedded in a checkpoint before reading it.
+///
+/// The `wasm_path` stored in a checkpoint is fully controlled by whoever wrote
+/// the file. A checkpoint from an untrusted source could therefore point at an
+/// arbitrary location on the filesystem. Callers are responsible for only
+/// resuming from trusted checkpoints, but as defense in depth we reject paths
+/// that are empty or resolve to anything other than an existing regular file
+/// (e.g. symlinks, directories, or device nodes).
+fn validate_wasm_path(wasm_path: &str, agent_id: &str) -> Result<(), SnapshotError> {
+    if wasm_path.is_empty() {
+        return Err(SnapshotError::InvalidSnapshot(format!(
+            "agent '{agent_id}' has an empty WASM path"
+        )));
+    }
+
+    let meta = std::fs::symlink_metadata(wasm_path).map_err(|e| {
+        SnapshotError::Io(std::io::Error::new(
+            e.kind(),
+            format!("failed to stat WASM for '{agent_id}' at '{wasm_path}': {e}"),
+        ))
+    })?;
+
+    if !meta.file_type().is_file() {
+        return Err(SnapshotError::InvalidSnapshot(format!(
+            "agent '{agent_id}' WASM path '{wasm_path}' is not a regular file"
+        )));
+    }
+
+    log::warn!(
+        "loading WASM for agent '{agent_id}' from checkpoint-specified path '{wasm_path}'; \
+         only resume from trusted checkpoints"
+    );
+
+    Ok(())
 }
 
 // ── Orchestrator persistence methods ─────────────────────────────────
@@ -142,11 +232,7 @@ fn restore_memory(
 impl Orchestrator {
     /// Convert current orchestrator state to a snapshot.
     pub fn to_snapshot(&self) -> OrchestratorSnapshot {
-        let total_fuel: u64 = self
-            .agents
-            .values()
-            .map(|inst| inst.fuel_consumed)
-            .sum();
+        let total_fuel: u64 = self.agents.values().map(|inst| inst.fuel_consumed).sum();
 
         let agents: Vec<AgentSnapshot> = self
             .agents
@@ -163,6 +249,7 @@ impl Orchestrator {
                     inbox: inst.inbox.iter().cloned().collect(),
                     outbox: state.outbox.iter().cloned().collect(),
                     env: state.env.clone(),
+                    allowed_urls: state.allowed_urls.clone(),
                     tick_count: inst.tick_count,
                     memory_state: None,
                 }
@@ -197,20 +284,21 @@ impl Orchestrator {
         }
 
         let config = OrchestratorConfig::default();
-        let mut orch = Orchestrator::new(config)
-            .map_err(|e| SnapshotError::WasmLoad(e.to_string()))?;
+        let mut orch =
+            Orchestrator::new(config).map_err(|e| SnapshotError::WasmLoad(e.to_string()))?;
 
         orch.configure_router(snap.router_config.clone());
         orch.round_count = snap.round_count;
 
         for agent_snap in &snap.agents {
-            let wasm_bytes = std::fs::read(&agent_snap.wasm_path)
-                .map_err(|e| {
-                    SnapshotError::Io(std::io::Error::new(
-                        e.kind(),
-                        format!("failed to read WASM for '{}': {e}", agent_snap.id),
-                    ))
-                })?;
+            validate_wasm_path(&agent_snap.wasm_path, &agent_snap.id)?;
+
+            let wasm_bytes = std::fs::read(&agent_snap.wasm_path).map_err(|e| {
+                SnapshotError::Io(std::io::Error::new(
+                    e.kind(),
+                    format!("failed to read WASM for '{}': {e}", agent_snap.id),
+                ))
+            })?;
 
             let module = Module::new(&orch.engine, &wasm_bytes)
                 .map_err(|e| SnapshotError::WasmLoad(e.to_string()))?;
@@ -220,7 +308,7 @@ impl Orchestrator {
                 wasi,
                 agent_message: None,
                 env: agent_snap.env.clone(),
-                allowed_urls: Vec::new(),
+                allowed_urls: agent_snap.allowed_urls.clone(),
                 fuel_consumed: agent_snap.fuel_consumed,
                 tick_count: 0,
                 agent_id: agent_snap.id.clone(),
@@ -254,8 +342,7 @@ impl Orchestrator {
             })?;
 
             if let Some(mem_bytes) = &agent_snap.memory_state {
-                restore_memory(&memory, &mut store, mem_bytes)
-                    .map_err(|e| SnapshotError::MemoryError(e.to_string()))?;
+                restore_memory(&memory, &mut store, mem_bytes)?;
             }
 
             let status = parse_agent_status(&agent_snap.status);
@@ -280,6 +367,9 @@ impl Orchestrator {
         }
 
         orch.dlq = VecDeque::from(snap.dlq);
+        orch.total_messages_routed = snap.cumulative_stats.total_messages_routed;
+        orch.total_messages_dropped = snap.cumulative_stats.total_messages_dropped;
+        orch.total_messages_dlq = snap.cumulative_stats.total_messages_dlq;
 
         Ok(orch)
     }
@@ -295,11 +385,7 @@ impl Orchestrator {
 
     /// Save with memory snapshots included (full fidelity).
     pub fn save_full(&self, path: &Path) -> Result<(), SnapshotError> {
-        let total_fuel: u64 = self
-            .agents
-            .values()
-            .map(|inst| inst.fuel_consumed)
-            .sum();
+        let total_fuel: u64 = self.agents.values().map(|inst| inst.fuel_consumed).sum();
 
         let agents: Vec<AgentSnapshot> = self
             .agents
@@ -317,6 +403,7 @@ impl Orchestrator {
                     inbox: inst.inbox.iter().cloned().collect(),
                     outbox: state.outbox.iter().cloned().collect(),
                     env: state.env.clone(),
+                    allowed_urls: state.allowed_urls.clone(),
                     tick_count: inst.tick_count,
                     memory_state: Some(mem),
                 }
@@ -410,5 +497,72 @@ impl Orchestrator {
 
         serde_json::to_string_pretty(&summary)
     }
+}
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_agent(memory_state: Option<Vec<u8>>) -> AgentSnapshot {
+        AgentSnapshot {
+            id: "agent-a".to_string(),
+            status: "Running".to_string(),
+            wasm_path: "agent.wasm".to_string(),
+            fuel_consumed: 42,
+            fuel_remaining: 100,
+            inbox: Vec::new(),
+            outbox: Vec::new(),
+            env: HashMap::new(),
+            allowed_urls: vec!["https://example.com".to_string()],
+            tick_count: 3,
+            memory_state,
+        }
+    }
+
+    #[test]
+    fn agent_snapshot_round_trips_allowed_urls_and_memory() {
+        let agent = sample_agent(Some(vec![1, 2, 3, 4, 5]));
+        let json = serde_json::to_string(&agent).unwrap();
+        let back: AgentSnapshot = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.allowed_urls, vec!["https://example.com".to_string()]);
+        assert_eq!(back.memory_state, Some(vec![1, 2, 3, 4, 5]));
+    }
+
+    #[test]
+    fn memory_state_serializes_as_compact_base64_string() {
+        let agent = sample_agent(Some(vec![0u8; 4096]));
+        let json = serde_json::to_string_pretty(&agent).unwrap();
+        // A base64 string stays on a single line rather than emitting one
+        // array element per byte.
+        assert!(json.lines().count() < 100, "memory dumped as byte array");
+        assert!(json.contains("\"memory_state\": \""));
+    }
+
+    #[test]
+    fn absent_memory_state_serializes_as_null() {
+        let agent = sample_agent(None);
+        let json = serde_json::to_string(&agent).unwrap();
+        assert!(json.contains("\"memory_state\":null"));
+        let back: AgentSnapshot = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.memory_state, None);
+    }
+
+    #[test]
+    fn validate_wasm_path_rejects_empty_and_missing() {
+        assert!(validate_wasm_path("", "agent-a").is_err());
+        assert!(validate_wasm_path("/nonexistent/path/agent.wasm", "agent-a").is_err());
+    }
+
+    #[test]
+    fn validate_wasm_path_rejects_directory_and_accepts_file() {
+        let dir = std::env::temp_dir().join(format!("cage-test-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        assert!(validate_wasm_path(dir.to_str().unwrap(), "agent-a").is_err());
+
+        let file = dir.join("agent.wasm");
+        std::fs::write(&file, b"\0asm").unwrap();
+        assert!(validate_wasm_path(file.to_str().unwrap(), "agent-a").is_ok());
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
 }

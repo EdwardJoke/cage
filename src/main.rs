@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::Path;
 
 use clap::{Args, Parser, Subcommand};
 
@@ -19,6 +20,8 @@ enum Command {
     Run(RunArgs),
     /// Multi-agent orchestration
     Orchestrate(OrchestrateArgs),
+    /// Resume from a checkpoint
+    Resume(ResumeArgs),
 }
 
 #[derive(Args)]
@@ -88,6 +91,45 @@ struct OrchestrateArgs {
     /// Enable Dead Letter Queue for unroutable messages
     #[arg(long)]
     dlq: bool,
+
+    /// Save checkpoint after every N rounds
+    #[arg(long)]
+    save_every: Option<usize>,
+
+    /// Directory for checkpoint files
+    #[arg(long)]
+    checkpoint_dir: Option<String>,
+
+    /// Include WASM linear memory in checkpoints
+    #[arg(long)]
+    full_snapshot: bool,
+}
+
+#[derive(Args)]
+struct ResumeArgs {
+    /// Path to checkpoint JSON file
+    #[arg(short, long)]
+    checkpoint: String,
+
+    /// Number of tick rounds to execute
+    #[arg(short, long, default_value = "1")]
+    rounds: u32,
+
+    /// Enable verbose (debug) logging
+    #[arg(short, long)]
+    verbose: bool,
+
+    /// Save checkpoint after every N rounds
+    #[arg(long)]
+    save_every: Option<usize>,
+
+    /// Directory for checkpoint files
+    #[arg(long)]
+    checkpoint_dir: Option<String>,
+
+    /// Include WASM linear memory in checkpoints
+    #[arg(long)]
+    full_snapshot: bool,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -96,6 +138,7 @@ fn main() -> anyhow::Result<()> {
     match cli.command {
         Command::Run(args) => run(args),
         Command::Orchestrate(args) => orchestrate(args),
+        Command::Resume(args) => resume(args),
     }
 }
 
@@ -219,6 +262,16 @@ fn orchestrate(args: OrchestrateArgs) -> anyhow::Result<()> {
         }
     }
 
+    // Configure auto-save if requested
+    if let Some(interval) = args.save_every {
+        orch.save_every(interval);
+    }
+    if let Some(dir) = &args.checkpoint_dir {
+        let p = std::path::PathBuf::from(dir);
+        std::fs::create_dir_all(&p)?;
+        orch.set_checkpoint_dir(p);
+    }
+
     // Run tick rounds
     for round in 1..=args.rounds {
         println!("\n--- Round {round} ---");
@@ -275,6 +328,94 @@ fn orchestrate(args: OrchestrateArgs) -> anyhow::Result<()> {
         for (from, msg) in &orch.observed_messages {
             println!("  [{from}] {msg:?}");
         }
+    }
+
+    // Save full checkpoint at end if requested
+    if args.full_snapshot {
+        let dir = args.checkpoint_dir.unwrap_or_else(|| ".".to_string());
+        let path = Path::new(&dir).join("checkpoint-final.json");
+        orch.save_full(&path)?;
+        println!("Full checkpoint saved to {}", path.display());
+    }
+
+    Ok(())
+}
+
+fn resume(args: ResumeArgs) -> anyhow::Result<()> {
+    let log_level = if args.verbose {
+        log::LevelFilter::Debug
+    } else {
+        log::LevelFilter::Info
+    };
+
+    env_logger::Builder::new()
+        .filter_level(log_level)
+        .init();
+
+    println!("Loading checkpoint from {} ...", args.checkpoint);
+    let mut orch = Orchestrator::load(Path::new(&args.checkpoint))?;
+
+    let starting_round = orch.round_count();
+    println!(
+        "Resumed orchestrator with {} agents at round {}",
+        orch.agent_count(),
+        starting_round
+    );
+
+    // Configure auto-save if requested
+    if let Some(interval) = args.save_every {
+        orch.save_every(interval);
+    }
+    if let Some(dir) = &args.checkpoint_dir {
+        let p = std::path::PathBuf::from(dir);
+        std::fs::create_dir_all(&p)?;
+        orch.set_checkpoint_dir(p);
+    }
+
+    // Run tick rounds
+    for round in 1..=args.rounds {
+        println!("\n--- Round {r} (resumed) ---", r = starting_round + round as usize);
+        let summary = orch.tick_all();
+
+        for result in &summary.results {
+            match &result.message {
+                Some(msg) => {
+                    println!(
+                        "  [{}] {:?} (routed: {})",
+                        result.agent_id, msg, result.messages_routed
+                    );
+                }
+                None => {
+                    println!(
+                        "  [{}] no message (routed: {})",
+                        result.agent_id, result.messages_routed
+                    );
+                }
+            }
+        }
+
+        if !summary.crashed.is_empty() {
+            println!("  CRASHED: {:?}", summary.crashed);
+        }
+    }
+
+    // Print final status
+    println!("\n--- Final Agent Status ---");
+    for (id, status) in orch.list_agents() {
+        let stats = orch.agent_stats(&id);
+        if let Some((fuel, ticks, _)) = stats {
+            println!("  {id}: {status:?} (fuel={fuel}, ticks={ticks})");
+        } else {
+            println!("  {id}: {status:?}");
+        }
+    }
+
+    // Save full checkpoint at end if requested
+    if args.full_snapshot {
+        let dir = args.checkpoint_dir.unwrap_or_else(|| ".".to_string());
+        let path = Path::new(&dir).join("checkpoint-final.json");
+        orch.save_full(&path)?;
+        println!("Full checkpoint saved to {}", path.display());
     }
 
     Ok(())

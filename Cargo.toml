@@ -34,4 +34,5 @@ serde_json = "1.0.150"
 ureq = { version = "3.3.0", default-features = false, features = ["rustls"] }
 wasmtime = "46.0.1"
 wasmtime-wasi = "46.0.1"
+chrono = { version = "0.4.45", features = ["serde"] }
 glob = "0.3"

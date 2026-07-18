@@ -269,6 +269,45 @@ impl PyOrchestrator {
             .collect()
     }
 
+    /// Save orchestrator state to a checkpoint JSON file.
+    fn save(&self, path: String) -> PyResult<()> {
+        self.inner
+            .save(std::path::Path::new(&path))
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    }
+
+    /// Save orchestrator state with WASM memory snapshots.
+    fn save_full(&self, path: String) -> PyResult<()> {
+        self.inner
+            .save_full(std::path::Path::new(&path))
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    }
+
+    /// Load orchestrator state from a checkpoint JSON file.
+    #[staticmethod]
+    fn load(path: String) -> PyResult<Self> {
+        let inner = Orchestrator::load(std::path::Path::new(&path))
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))?;
+        Ok(PyOrchestrator { inner })
+    }
+
+    /// Export a human-readable summary of the orchestrator state.
+    fn export_summary(&self) -> PyResult<String> {
+        self.inner
+            .export_summary()
+            .map_err(|e| PyRuntimeError::new_err(e.to_string()))
+    }
+
+    /// Set checkpoint save interval in rounds.
+    fn set_save_every(&mut self, n: usize) {
+        self.inner.save_every(n);
+    }
+
+    /// Set the directory for auto-save checkpoints.
+    fn set_checkpoint_dir(&mut self, dir: String) {
+        self.inner.set_checkpoint_dir(std::path::PathBuf::from(dir));
+    }
+
     fn __repr__(&self) -> String {
         format!("Orchestrator(agents={})", self.inner.agent_count())
     }
@@ -278,7 +317,7 @@ impl PyOrchestrator {
 
 /// Cage: multi-agent WASM orchestrator.
 #[pymodule]
-fn cage(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn _native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyOrchestrator>()?;
     m.add_class::<PyRoundSummary>()?;
     Ok(())

@@ -8,6 +8,7 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 
 use anyhow::{anyhow, Result};
+use serde::{Deserialize, Serialize};
 use wasmtime::*;
 use wasmtime_wasi::WasiCtxBuilder;
 
@@ -15,8 +16,8 @@ use crate::ipc::AgentMessage;
 use crate::router::{MessageRouter, RouterConfig};
 use crate::sandbox;
 
-type SandboxState = sandbox::SandboxState;
-type InboxState = sandbox::InboxState;
+pub(crate) type SandboxState = sandbox::SandboxState;
+pub(crate) type InboxState = sandbox::InboxState;
 
 // ── Public types ────────────────────────────────────────────────────
 
@@ -36,7 +37,7 @@ pub enum AgentStatus {
 }
 
 /// Configuration for the orchestrator.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OrchestratorConfig {
     /// Default fuel budget per agent (overridable per spawn).
     pub default_fuel: u64,
@@ -54,7 +55,7 @@ impl Default for OrchestratorConfig {
 }
 
 /// Result of a single agent tick.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TickResult {
     pub agent_id: AgentId,
     pub message: Option<AgentMessage>,
@@ -65,7 +66,7 @@ pub struct TickResult {
 }
 
 /// Summary of one round across all running agents.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RoundSummary {
     pub results: Vec<TickResult>,
     /// Fuel consumed *this round only* (delta, not cumulative).
@@ -87,36 +88,49 @@ pub struct RoundSummary {
 
 // ── Per-agent runtime state ─────────────────────────────────────────
 
-struct AgentInstance {
-    id: AgentId,
-    store: Store<SandboxState>,
-    instance: Instance,
-    memory: Memory,
+pub(crate) struct AgentInstance {
+    pub(crate) id: AgentId,
+    pub(crate) wasm_path: String,
+    pub(crate) store: Store<SandboxState>,
+    pub(crate) instance: Instance,
+    pub(crate) memory: Memory,
     /// Messages from other agents queued for delivery before next tick.
-    inbox: VecDeque<AgentMessage>,
+    pub(crate) inbox: VecDeque<AgentMessage>,
     #[allow(dead_code)]
-    fuel_budget: u64,
-    fuel_consumed: u64,
-    tick_count: u32,
-    status: AgentStatus,
+    pub(crate) fuel_budget: u64,
+    pub(crate) fuel_consumed: u64,
+    pub(crate) tick_count: u32,
+    pub(crate) status: AgentStatus,
 }
 
 // ── Orchestrator ────────────────────────────────────────────────────
 
 pub struct Orchestrator {
-    engine: Engine,
-    config: OrchestratorConfig,
-    agents: HashMap<AgentId, AgentInstance>,
+    pub(crate) engine: Engine,
+    pub(crate) config: OrchestratorConfig,
+    pub(crate) agents: HashMap<AgentId, AgentInstance>,
     /// Accumulated observed messages across rounds.
     pub observed_messages: Vec<(AgentId, AgentMessage)>,
     /// Pluggable message router.
-    router: Box<dyn MessageRouter>,
+    pub(crate) router: Box<dyn MessageRouter>,
     /// Router configuration (topology, hub, DLQ toggle).
-    router_config: RouterConfig,
+    pub(crate) router_config: RouterConfig,
     /// Dead Letter Queue — unroutable messages when DLQ is enabled.
-    dlq: VecDeque<AgentMessage>,
+    pub(crate) dlq: VecDeque<AgentMessage>,
     /// Count of messages added to DLQ this round (reset each tick_all).
-    messages_dlq: usize,
+    pub(crate) messages_dlq: usize,
+    /// Number of completed tick rounds.
+    pub(crate) round_count: usize,
+    /// Cumulative messages routed across all rounds.
+    pub(crate) total_messages_routed: usize,
+    /// Cumulative messages dropped across all rounds.
+    pub(crate) total_messages_dropped: usize,
+    /// Cumulative messages sent to DLQ across all rounds.
+    pub(crate) total_messages_dlq: usize,
+    /// Checkpoint interval (None = disabled).
+    pub(crate) save_interval: Option<usize>,
+    /// Directory for auto-save checkpoints.
+    pub(crate) checkpoint_dir: Option<std::path::PathBuf>,
 }
 
 impl Orchestrator {
@@ -141,6 +155,12 @@ impl Orchestrator {
             router_config,
             dlq: VecDeque::new(),
             messages_dlq: 0,
+            round_count: 0,
+            total_messages_routed: 0,
+            total_messages_dropped: 0,
+            total_messages_dlq: 0,
+            save_interval: None,
+            checkpoint_dir: None,
         })
     }
 
@@ -273,10 +293,10 @@ impl Orchestrator {
                 }
             };
 
-        if ptr != 0 {
-            if let Ok(free) = instance.get_typed_func::<i32, ()>(&mut store, "_cage_free") {
-                free.call(&mut store, ptr)?;
-            }
+        if ptr != 0
+            && let Ok(free) = instance.get_typed_func::<i32, ()>(&mut store, "_cage_free")
+        {
+            free.call(&mut store, ptr)?;
         }
 
         let fuel_after = store.get_fuel()?;
@@ -287,6 +307,7 @@ impl Orchestrator {
             id.clone(),
             AgentInstance {
                 id,
+                wasm_path: wasm_path.to_string(),
                 store,
                 instance,
                 memory,
@@ -387,7 +408,7 @@ impl Orchestrator {
             }
         }
 
-        let msg = tick_result_msg.unwrap_or_else(|_| None);
+        let msg = tick_result_msg.unwrap_or(None);
         Ok(TickResult {
             agent_id: id.clone(),
             message: msg,
@@ -509,10 +530,10 @@ impl Orchestrator {
                     messages_dropped += tick_result.messages_dropped;
 
                     // If the tick crashed but still returned Ok, check status
-                    if let Some(inst) = self.agents.get(&id) {
-                        if matches!(inst.status, AgentStatus::Crashed(_)) {
-                            crashed.push(id.clone());
-                        }
+                    if let Some(inst) = self.agents.get(&id)
+                        && matches!(inst.status, AgentStatus::Crashed(_))
+                    {
+                        crashed.push(id.clone());
                     }
 
                     results.push(tick_result);
@@ -547,6 +568,22 @@ impl Orchestrator {
 
         let messages_dlq = self.messages_dlq;
         self.messages_dlq = 0; // reset round counter
+
+        self.round_count += 1;
+        self.total_messages_routed += messages_routed;
+        self.total_messages_dropped += messages_dropped;
+        self.total_messages_dlq += messages_dlq;
+
+        // Auto-save if configured
+        if let Some(interval) = self.save_interval
+            && self.round_count.is_multiple_of(interval)
+            && let Some(dir) = &self.checkpoint_dir
+        {
+            let path = dir.join(format!("checkpoint-{}.json", self.round_count));
+            if let Err(e) = self.save(&path) {
+                log::warn!("auto-save at round {} failed: {e}", self.round_count);
+            }
+        }
 
         RoundSummary {
             results,
@@ -599,6 +636,26 @@ impl Orchestrator {
         }
         inst.status = AgentStatus::Running;
         Ok(())
+    }
+
+    /// Number of completed tick rounds.
+    pub fn round_count(&self) -> usize {
+        self.round_count
+    }
+
+    /// Cumulative total messages routed across all rounds.
+    pub fn total_messages_routed(&self) -> usize {
+        self.total_messages_routed
+    }
+
+    /// Cumulative total messages dropped across all rounds.
+    pub fn total_messages_dropped(&self) -> usize {
+        self.total_messages_dropped
+    }
+
+    /// Cumulative total messages sent to DLQ across all rounds.
+    pub fn total_messages_dlq(&self) -> usize {
+        self.total_messages_dlq
     }
 }
 

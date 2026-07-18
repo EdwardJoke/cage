@@ -7,5 +7,6 @@ pub mod ipc;
 pub mod orchestrator;
 pub mod router;
 pub mod sandbox;
+pub mod snapshot;
 
 pub use sandbox::Sandbox;

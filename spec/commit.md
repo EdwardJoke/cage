@@ -4,7 +4,7 @@ We use [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) v1
 
 ## Format
 
-```
+```text
 <type>(<scope>): <description>
 
 [optional body]
@@ -51,7 +51,7 @@ We use [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) v1
 
 ## Examples
 
-```
+```text
 feat(sandbox): add fuel metering to WASM execution
 
 fix(orchestrator): handle deadlock on agent kill during inbox flush

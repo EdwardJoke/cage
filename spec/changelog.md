@@ -4,10 +4,10 @@ We adhere to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) v1.1.0.
 
 ## Format
 
-```
+```text
 # Changelog
 
-## [<version>] — <YYYY-MM-DD>
+## [Unreleased]
 
 ### Added      — new features
 ### Changed    — changes to existing functionality
@@ -15,6 +15,12 @@ We adhere to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) v1.1.0.
 ### Removed    — removed features
 ### Fixed      — bug fixes
 ### Security   — vulnerability fixes
+
+## [<version>] — <YYYY-MM-DD>
+
+### Added
+### Changed
+### Fixed
 ```
 
 ## Rules
@@ -28,7 +34,9 @@ We adhere to [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) v1.1.0.
 
 ## Linking
 
-```
+```text
 [unreleased]: https://codeberg.org/EdwardJoke/cage/compare/v0.1.0...HEAD
 [0.1.0]: https://codeberg.org/EdwardJoke/cage/releases/tag/v0.1.0
 ```
+
+Note: The first release (e.g., 0.1.0) typically links directly to the release page rather than a comparison diff, since there's no prior tag to compare against.

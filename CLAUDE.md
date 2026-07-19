@@ -1,7 +1,7 @@
 # Cage — Agent Context
 
 ## Identity
-Deterministic WASM sandbox for multi-agent orchestration. Single crate `coplex-cage`.
+Sandboxed WASM runtime for multi-agent orchestration. Cargo workspace with main crate `coplex-cage`, example agents (agent-p0, agent-p1), and Python bindings (cage-py).
 
 ## Build & Run
 

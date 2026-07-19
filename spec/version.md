@@ -4,7 +4,7 @@ We adhere to [Semantic Versioning 2.0.0](https://semver.org/spec/v2.0.0.html).
 
 ## Format
 
-```
+```text
 MAJOR.MINOR.PATCH[-PRERELEASE][+BUILD]
 ```
 
@@ -24,7 +24,7 @@ MAJOR.MINOR.PATCH[-PRERELEASE][+BUILD]
 - `0.1.0` is the first public release.
 - `0.MINOR` bumps indicate substantial new capability.
 - `0.0.PATCH` fixes are rare; prefer `0.1.0` for any meaningful change.
-- Breaking changes within `0.x` only bump MINOR (per semver §4).
+- Breaking changes within `0.x` bump MINOR (project policy; SemVer §4 permits anything to change during initial development).
 
 ## Source of truth
 

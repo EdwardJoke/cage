@@ -1,6 +1,6 @@
 # Cage
 
-Deterministic WASM sandbox for multi-agent orchestration. Agents are compiled to `wasm32-wasip1`, run inside Wasmtime with fuel-limited execution, and communicate via a pluggable message router with 4 topologies.
+Sandboxed WASM runtime for multi-agent orchestration. Agents are compiled to `wasm32-wasip1`, run inside Wasmtime with fuel-limited execution, and communicate via a pluggable message router with 4 topologies.
 
 ## Repository
 
@@ -10,7 +10,7 @@ Deterministic WASM sandbox for multi-agent orchestration. Agents are compiled to
 
 ## Directory Layout
 
-```
+```text
 cage/
 ├── Cargo.toml              # Workspace root; members: examples/agent-p0, agent-p1, cage-py
 ├── src/

@@ -9,7 +9,7 @@
 
 ## Feature branches
 
-```
+```text
 <type>/<short-description>
 ```
 
@@ -27,7 +27,7 @@ Types:
 
 Examples:
 
-```
+```text
 feat/http-client-timeout
 fix/sandbox-fuel-overflow
 docs/api-usage

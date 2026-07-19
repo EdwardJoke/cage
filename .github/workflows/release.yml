@@ -1,0 +1,150 @@
+name: Release
+
+on:
+  push:
+    branches: [main, master]
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  # ───────────────────────────────────────────
+  # STABLE RELEASE: triggered by version tags
+  # ───────────────────────────────────────────
+  stable-release:
+    name: Stable Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Create GitHub Release (Latest)
+        uses: softprops/action-gh-release@v3.0.2
+        with:
+          name: Release ${{ github.ref_name }}
+          generate_release_notes: true
+          prerelease: false
+          make_latest: true
+
+      - name: Build Rust crate
+        run: cargo build --release
+
+      - name: Build Python wheels (all platforms)
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          args: --release --out dist
+          working-directory: ./cage-py
+          sdist: true
+          manylinux: auto
+
+      - name: Upload wheels to GitHub Release
+        uses: softprops/action-gh-release@v3.0.2
+        with:
+          files: dist/*
+          append_body: true
+
+      - name: Publish to PyPI
+        uses: PyO3/maturin-action@v1
+        with:
+          command: publish
+          working-directory: ./cage-py
+        env:
+          MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+
+  # ───────────────────────────────────────────
+  # NIGHTLY RELEASE: triggered on push to main if code changed
+  # ───────────────────────────────────────────
+  check-nightly-needed:
+    name: Check if Nightly is needed
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.check.outputs.changed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Check if code changed since last nightly
+        id: check
+        run: |
+          LAST_NIGHTLY_TAG=$(git tag -l "nightly-*" --sort=-v:refname | head -n1)
+          if [ -z "$LAST_NIGHTLY_TAG" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "No previous nightly tag found, will build"
+          else
+            CHANGES=$(git log $LAST_NIGHTLY_TAG..HEAD --oneline -- "src/" "cage-py/src/" "Cargo.toml" "cage-py/Cargo.toml" "cage-py/pyproject.toml")
+            if [ -n "$CHANGES" ]; then
+              echo "changed=true" >> $GITHUB_OUTPUT
+              echo "Code changes detected since $LAST_NIGHTLY_TAG"
+            else
+              echo "changed=false" >> $GITHUB_OUTPUT
+              echo "No code changes since $LAST_NIGHTLY_TAG, skipping"
+            fi
+          fi
+
+  nightly-release:
+    name: Nightly Release
+    needs: check-nightly-needed
+    if: needs.check-nightly-needed.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Generate nightly tag
+        id: nightly_tag
+        run: |
+          DATE=$(date +%Y-%m-%d)
+          SHORT_SHA=$(git rev-parse --short HEAD)
+          TAG="nightly-${DATE}-${SHORT_SHA}"
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release (Pre-release)
+        uses: softprops/action-gh-release@v3.0.2
+        with:
+          tag_name: ${{ steps.nightly_tag.outputs.tag }}
+          name: Nightly ${{ steps.nightly_tag.outputs.tag }}
+          generate_release_notes: true
+          prerelease: true
+          make_latest: false
+          body: |
+            ⚠️ This is a nightly pre-release. It may contain unstable changes.
+            Built from commit: ${{ github.sha }}
+
+      - name: Build Rust crate
+        run: cargo build --release
+
+      - name: Build Python wheels (all platforms)
+        uses: PyO3/maturin-action@v1
+        with:
+          command: build
+          args: --release --out dist
+          working-directory: ./cage-py
+          sdist: true
+          manylinux: auto
+
+      - name: Upload wheels to GitHub Release
+        uses: softprops/action-gh-release@v3.0.2
+        with:
+          tag_name: ${{ steps.nightly_tag.outputs.tag }}
+          files: dist/*
+          append_body: true
+
+      - name: Publish to PyPI (TestPyPI for nightly)
+        uses: PyO3/maturin-action@v1
+        with:
+          command: publish
+          args: --repository testpypi
+          working-directory: ./cage-py
+        env:
+          MATURIN_PYPI_TOKEN: ${{ secrets.TESTPYPI_API_TOKEN }}
